@@ -1,0 +1,11 @@
+{
+  "name": "d-vharanda-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Website for D.Vharanda Investments (Pvt) Ltd, Chivhu. Static HTML + CSS, no build step.",
+  "scripts": {
+    "build": "echo \"Static site: nothing to build. Publish the repository root.\"",
+    "start": "npx --yes serve@14.2.4 .",
+    "dev": "npx --yes serve@14.2.4 ."
+  }
+}
