@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D.Vharanda Investments | Boreholes, Solar, Fencing &amp; Supplies in Chivhu</title>
+  <meta name="description" content="D.Vharanda Investments Pvt Ltd – borehole drilling, solar installations, building, electrical, plumbing and fencing supplies, groceries and kitchenware in Chivhu, Zimbabwe.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/png" href="images/favicon.png">
+  <link rel="apple-touch-icon" href="images/icon-180.png">
+  <meta name="theme-color" content="#0b1c48">
+
+  <!-- react-three-fiber + React + three.js loaded from a CDN (no build step needed) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "react/": "https://esm.sh/react@18.3.1/",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
+      "three": "https://esm.sh/three@0.169.0",
+      "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.17.10?deps=react@18.3.1,react-dom@18.3.1,three@0.169.0",
+      "htm": "https://esm.sh/htm@3.1.1"
+    }
+  }
+  </script>
+  <!-- Scroll-through 3D world tour (react-three-fiber). Scroll position drives the camera. -->
+  <script type="module">
+    import React, { useRef, useMemo, useEffect, useState } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { Canvas, useFrame } from '@react-three/fiber';
+    import * as THREE from 'three';
+    import htm from 'htm';
+
+    const html = htm.bind(React.createElement);
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const section = document.getElementById('world');
+    const mountEl = document.getElementById('world-canvas');
+
+    /* ---------- Scroll progress (0 → 1 across the section) ---------- */
+    const STOPS = 6;
+    const progress = { target: 0, value: 0, seg: 0 };
+    const railLinks = section ? section.querySelectorAll('.world-rail a') : [];
+    let lastActive = -1;
+
+    function measure() {
+      if (!section) return;
+      const range = section.offsetHeight - window.innerHeight;
+      const p = range > 0 ? -section.getBoundingClientRect().top / range : 0;
+      progress.target = Math.min(1, Math.max(0, p));
+      const active = Math.round(progress.target * (STOPS - 1));
+      if (active !== lastActive) {
+        railLinks.forEach((a, i) => a.classList.toggle('is-active', i === active));
+        section.querySelectorAll('.world-step').forEach((s, i) => s.classList.toggle('is-active', i === active));
+        lastActive = active;
+      }
+      section.classList.toggle('is-started', progress.target > 0.02);
+    }
+    if (section) {
+      section.classList.add('world-js');
+      window.addEventListener('scroll', measure, { passive: true });
+      window.addEventListener('resize', measure);
+      measure();
+    }
+
+    /* ---------- Camera keyframes: one per tour stop (world x offset applied below) ---------- */
+    const OFFSET = 18; // world is centred on x = 18 so the shadow camera covers it all
+    const KEYS = [
+      { pos: [-14, 14, 22], look: [14, 0, 0] },    // overview
+      { pos: [-4.2, 4.4, 12.5], look: [-1.6, 2.3, 0] }, // borehole
+      { pos: [10, 4.2, 12.5], look: [12.2, 1.7, 0] },  // solar
+      { pos: [20.5, 3.6, 11.5], look: [22.6, 1.1, 0] }, // steel & fencing
+      { pos: [32.6, 3.8, 12.5], look: [34.8, 1.8, 0] }, // shop
+      { pos: [46, 17, 27], look: [18, 0, 0] },      // finale aerial
+    ];
+    const vA = new THREE.Vector3(), vB = new THREE.Vector3(), lookAt = new THREE.Vector3(), tmp = new THREE.Vector3();
+
+    function CameraRig() {
+      useFrame(({ camera, size }, dt) => {
+        progress.value += (progress.target - progress.value) * Math.min(1, dt * 4);
+        const seg = progress.value * (KEYS.length - 1);
+        progress.seg = seg;
+        const i = Math.min(KEYS.length - 2, Math.floor(seg));
+        let f = Math.min(1, seg - i);
+        f = f * f * (3 - 2 * f); // ease in/out → the camera settles at each stop
+
+        const a = KEYS[i], b = KEYS[i + 1];
+        vA.fromArray(a.pos).lerp(vB.fromArray(b.pos), f);
+        vA.y += Math.sin(Math.PI * f) * 2.8; // lift up between stops, like a drone
+        lookAt.fromArray(a.look).lerp(vB.fromArray(b.look), f);
+
+        // Portrait screens: pull back so the scene still fits
+        const aspect = size.width / size.height;
+        if (aspect < 1.1) {
+          tmp.copy(vA).sub(lookAt).multiplyScalar(1 + (1.1 - aspect) * 0.9);
+          vA.copy(lookAt).add(tmp);
+        }
+        vA.x -= OFFSET; lookAt.x -= OFFSET;
+        camera.position.copy(vA);
+        camera.lookAt(lookAt);
+      });
+      return null;
+    }
+
+    /* ---------- Helpers ---------- */
+    function rng(seed) { return () => ((seed = (seed * 16807) % 2147483647) / 2147483647); }
+    const near = (stop) => Math.max(0, 1 - Math.abs(progress.seg - stop) * 1.6); // 1 at the stop, 0 away
+
+    const M = {
+      steel: { color: '#6b7683', metalness: 0.45, roughness: 0.45 },
+      dark:  { color: '#1d2430', metalness: 0.3, roughness: 0.6 },
+      amber: { color: '#f5a623', metalness: 0.3, roughness: 0.45 },
+      navy:  { color: '#0b2a4a', metalness: 0.2, roughness: 0.6 },
+      wall:  { color: '#f1e8d8', roughness: 0.9 },
+      cell:  { color: '#0d2f5c', metalness: 0.5, roughness: 0.2 },
+    };
+    const Box = ({ args, m, ...p }) => html`
+      <mesh castShadow receiveShadow ...${p}>
+        <boxGeometry args=${args} />
+        <meshStandardMaterial ...${m} />
+      </mesh>`;
+    const Cyl = ({ args, m, ...p }) => html`
+      <mesh castShadow receiveShadow ...${p}>
+        <cylinderGeometry args=${args} />
+        <meshStandardMaterial ...${m} />
+      </mesh>`;
+
+    /* ---------- Landscape ---------- */
+    function Land() {
+      const trees = useMemo(() => {
+        const r = rng(7), list = [];
+        while (list.length < 46) {
+          const x = -22 + r() * 80, z = -26 + r() * 48;
+          if (z > -4 && z < 7) continue;            // keep the tour strip clear
+          list.push({ x, z, s: 0.7 + r() * 0.7 });
+        }
+        return list;
+      }, []);
+      return html`
+        <group>
+          <mesh rotation-x=${-Math.PI / 2} receiveShadow>
+            <planeGeometry args=${[200, 120]} />
+            <meshStandardMaterial color="#d8bc8c" roughness=${1} />
+          </mesh>
+          <mesh rotation-x=${-Math.PI / 2} position=${[18, 0.01, 3.6]} receiveShadow>
+            <planeGeometry args=${[74, 2.2]} />
+            <meshStandardMaterial color="#b9956a" roughness=${1} />
+          </mesh>
+          ${trees.map((t, i) => html`
+            <group key=${i} position=${[t.x, 0, t.z]} scale=${t.s}>
+              <${Cyl} args=${[0.1, 0.16, 1.8, 6]} position=${[0, 0.9, 0]} m=${{ color: '#6b4a2f', roughness: 1 }} />
+              <mesh position=${[0, 2, 0]} scale=${[1.7, 0.45, 1.7]} castShadow>
+                <sphereGeometry args=${[1, 12, 8]} />
+                <meshStandardMaterial color=${i % 3 ? '#6f8f3a' : '#87a24a'} roughness=${0.9} />
+              </mesh>
+            </group>`)}
+        </group>`;
+    }
+
+    /* ---------- Stop 1: borehole ---------- */
+    function Borehole() {
+      const drops = useRef([]);
+      const seeds = useMemo(() => Array.from({ length: 16 }, (_, i) => ({ off: i / 16, a: (i / 16) * Math.PI * 2 })), []);
+      useFrame(({ clock }) => {
+        const t = clock.elapsedTime, k = 0.35 + near(1) * 0.65;
+        seeds.forEach((s, i) => {
+          const d = drops.current[i]; if (!d) return;
+          const p = still ? s.off : (t * 0.55 + s.off) % 1;
+          d.position.set(Math.cos(s.a) * p * 1.1, 0.4 + (3.4 * p - 3.8 * p * p) * k, Math.sin(s.a) * p * 1.1);
+          d.scale.setScalar(Math.max(0.01, Math.sin(p * Math.PI)) * k);
+        });
+      });
+      const legs = [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]];
+      return html`
+        <group>
+          <!-- tank stand -->
+          <group position=${[0.6, 0, -0.6]}>
+            ${legs.map(([x, z], i) => html`<${Cyl} key=${i} args=${[0.06, 0.06, 4, 8]} position=${[x, 2, z]} m=${M.steel} />`)}
+            ${[1.2, 2.6].map((y) => html`
+              <group key=${y}>
+                <${Box} args=${[1.7, 0.06, 0.06]} position=${[0, y, 0.8]} m=${M.steel} />
+                <${Box} args=${[1.7, 0.06, 0.06]} position=${[0, y, -0.8]} m=${M.steel} />
+                <${Box} args=${[0.06, 0.06, 1.7]} position=${[0.8, y, 0]} m=${M.steel} />
+                <${Box} args=${[0.06, 0.06, 1.7]} position=${[-0.8, y, 0]} m=${M.steel} />
+              </group>`)}
+            <${Box} args=${[2, 0.12, 2]} position=${[0, 4.05, 0]} m=${M.steel} />
+            <${Cyl} args=${[0.9, 0.9, 1.7, 32]} position=${[0, 4.95, 0]} m=${M.dark} />
+            ${[4.5, 4.95, 5.4].map((y) => html`
+              <mesh key=${y} position=${[0, y, 0]} rotation-x=${Math.PI / 2}>
+                <torusGeometry args=${[0.91, 0.025, 8, 40]} />
+                <meshStandardMaterial ...${M.dark} />
+              </mesh>`)}
+            <${Cyl} args=${[0.05, 0.05, 4, 8]} position=${[0.95, 2, 0.4]} m=${{ color: '#2f80ed', roughness: 0.4 }} />
+          </group>
+          <!-- drill rig truck -->
+          <group position=${[-3.4, 0, -1.6]}>
+            <${Box} args=${[3, 0.9, 1.4]} position=${[0, 0.75, 0]} m=${M.amber} />
+            <${Box} args=${[0.9, 1, 1.4]} position=${[1.95, 0.8, 0]} m=${M.navy} />
+            ${[-1, 0.2, 1.9].map((x) => html`
+              <mesh key=${x} position=${[x, 0.3, 0]} rotation-x=${Math.PI / 2} castShadow>
+                <cylinderGeometry args=${[0.3, 0.3, 1.5, 16]} />
+                <meshStandardMaterial color="#222" roughness=${0.9} />
+              </mesh>`)}
+            <mesh position=${[-0.6, 3.7, 0]}>
+              <cylinderGeometry args=${[0.12, 0.6, 5, 4, 8, true]} />
+              <meshStandardMaterial color="#f5a623" wireframe />
+            </mesh>
+          </group>
+          <!-- borehole head + flushing water -->
+          <group position=${[2.4, 0, 1.6]}>
+            <${Cyl} args=${[0.22, 0.26, 0.4, 16]} position=${[0, 0.2, 0]} m=${{ color: '#e9eef3', metalness: 0.6, roughness: 0.3 }} />
+            ${seeds.map((_, i) => html`
+              <mesh key=${i} ref=${(el) => (drops.current[i] = el)}>
+                <sphereGeometry args=${[0.09, 12, 12]} />
+                <meshStandardMaterial color="#5fb4ff" emissive="#2f80ed" emissiveIntensity=${0.3} roughness=${0.1} />
+              </mesh>`)}
+          </group>
+          <!-- pump house -->
+          <group position=${[3.3, 0, -1.8]}>
+            <${Box} args=${[1.5, 1.4, 1.3]} position=${[0, 0.7, 0]} m=${{ color: '#d8d2c4', roughness: 1 }} />
+            <${Box} args=${[0.5, 0.9, 0.02]} position=${[0, 0.45, 0.66]} m=${M.navy} />
+          </group>
+        </group>`;
+    }
+
+    /* ---------- Stop 2: solar home ---------- */
+    function SolarPanelGrid({ cols, rows, ...p }) {
+      const cells = [];
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push([(c - (cols - 1) / 2) * 0.62, (r - (rows - 1) / 2) * 0.92]);
+      return html`
+        <group ...${p}>
+          <${Box} args=${[cols * 0.62 + 0.08, rows * 0.92 + 0.08, 0.04]} m=${{ color: '#cfd6de', metalness: 0.9, roughness: 0.3 }} />
+          ${cells.map(([x, y], i) => html`
+            <mesh key=${i} position=${[x, y, 0.03]}>
+              <boxGeometry args=${[0.58, 0.88, 0.02]} />
+              <meshPhysicalMaterial ...${M.cell} clearcoat=${1} clearcoatRoughness=${0.1} />
+            </mesh>`)}
+        </group>`;
+    }
+    function Solar() {
+      const win = useRef([]);
+      useFrame(() => {
+        const glow = 0.15 + near(2) * 1.4;
+        win.current.forEach((m) => m && (m.emissiveIntensity = glow));
+      });
+      return html`
+        <group position=${[12.5, 0, 0]}>
+          <${Box} args=${[4.4, 2.3, 3.2]} position=${[0, 1.15, 0]} m=${M.wall} />
+          <mesh position=${[0, 3.05, 0]} rotation-y=${Math.PI / 4} scale=${[1.3, 1, 0.98]} castShadow>
+            <coneGeometry args=${[3.4, 1.5, 4]} />
+            <meshStandardMaterial color="#8a3b2b" roughness=${0.8} />
+          </mesh>
+          <${SolarPanelGrid} cols=${4} rows=${1} position=${[0, 2.95, 1]} rotation-x=${-1.0} />
+          ${[-1.3, 1.3].map((x, i) => html`
+            <mesh key=${x} position=${[x, 1.3, 1.61]}>
+              <boxGeometry args=${[0.9, 0.8, 0.02]} />
+              <meshStandardMaterial ref=${(m) => (win.current[i] = m)} color="#ffe2a8" emissive="#ffb84d" emissiveIntensity=${0.2} />
+            </mesh>`)}
+          <${Box} args=${[0.8, 1.6, 0.04]} position=${[0, 0.8, 1.61]} m=${M.navy} />
+          <!-- ground-mounted array -->
+          <group position=${[3.8, 0, 1.4]} rotation-y=${-0.35}>
+            ${[-0.9, 0.9].map((x) => html`<${Cyl} key=${x} args=${[0.05, 0.05, 1.2, 8]} position=${[x, 0.6, 0]} m=${M.steel} />`)}
+            <${SolarPanelGrid} cols=${3} rows=${2} position=${[0, 1.3, 0]} rotation-x=${-0.75} />
+          </group>
+          <!-- sun -->
+          <mesh position=${[5, 11, -14]}>
+            <sphereGeometry args=${[1.4, 32, 32]} />
+            <meshBasicMaterial color="#ffd27a" />
+          </mesh>
+        </group>`;
+    }
+
+    /* ---------- Stop 3: fencing & steelwork ---------- */
+    function Steel() {
+      const left = useRef(), right = useRef(), sparks = useRef([]);
+      const sparkSeeds = useMemo(() => { const r = rng(3); return Array.from({ length: 14 }, () => ({ off: r(), dx: r() - 0.5, dz: r() - 0.5, up: 0.4 + r() * 0.6 })); }, []);
+      useFrame(({ clock }) => {
+        const open = Math.min(1, Math.max(0, (progress.seg - 2.3) / 0.6)) * 1.25;
+        if (left.current) left.current.rotation.y = open;
+        if (right.current) right.current.rotation.y = -open;
+        const t = clock.elapsedTime, on = near(3) > 0.2 && !still;
+        sparkSeeds.forEach((s, i) => {
+          const m = sparks.current[i]; if (!m) return;
+          const p = (t * 1.8 + s.off) % 1;
+          m.visible = on;
+          m.position.set(s.dx * p * 1.2, s.up * p * 1.2 - p * p * 0.9, s.dz * p * 1.2);
+          m.scale.setScalar(1 - p);
+        });
+      });
+      const posts = [], wires = [[-5, -1], [1, 5]];
+      for (let x = -5; x <= 5.01; x += 1.25) if (x < -0.9 || x > 0.9) posts.push(x);
+      const leaf = html`
+        <group>
+          <${Box} args=${[1, 0.06, 0.06]} position=${[0.5, 1.5, 0]} m=${M.navy} />
+          <${Box} args=${[1, 0.06, 0.06]} position=${[0.5, 0.15, 0]} m=${M.navy} />
+          ${[0.1, 0.3, 0.5, 0.7, 0.9].map((x) => html`<${Box} key=${x} args=${[0.04, 1.4, 0.04]} position=${[x, 0.82, 0]} m=${M.navy} />`)}
+        </group>`;
+      return html`
+        <group position=${[24, 0, -1.2]}>
+          ${posts.map((x) => html`<${Box} key=${x} args=${[0.1, 1.7, 0.1]} position=${[x, 0.85, 0]} m=${M.steel} />`)}
+          ${wires.map(([a, b]) => [0.45, 0.85, 1.25, 1.6].map((y) => html`
+            <${Box} key=${a + '-' + y} args=${[b - a, 0.02, 0.02]} position=${[(a + b) / 2, y, 0]} m=${{ color: '#aab4be', metalness: 0.4, roughness: 0.4 }} />`))}
+          <${Box} args=${[0.14, 1.9, 0.14]} position=${[-1.05, 0.95, 0]} m=${M.amber} />
+          <${Box} args=${[0.14, 1.9, 0.14]} position=${[1.05, 0.95, 0]} m=${M.amber} />
+          <group ref=${left} position=${[-1, 0, 0]}>${leaf}</group>
+          <group ref=${right} position=${[1, 0, 0]} scale-x=${-1}>${leaf}</group>
+          <!-- barbed wire + mesh rolls -->
+          ${[[-3.6, 2.4], [-3, 2.6], [-3.3, 3.1], [-2.6, 3]].map(([x, z], i) => html`
+            <${Cyl} key=${i} args=${[0.32, 0.32, 0.5, 20]} position=${[x, 0.25, z]} m=${{ color: '#c3cad2', metalness: 0.35, roughness: 0.45 }} />`)}
+          ${[[3.2, 2.5], [3.8, 2.7], [3.5, 3.2]].map(([x, z], i) => html`
+            <${Cyl} key=${i} args=${[0.28, 0.28, 0.9, 20]} position=${[x, 0.45, z]} m=${{ color: '#e6eaee', roughness: 0.6 }} />`)}
+          <!-- welding bench + sparks -->
+          <group position=${[1.9, 0, 2.6]}>
+            <${Box} args=${[1.4, 0.08, 0.7]} position=${[0, 0.8, 0]} m=${M.steel} />
+            ${[[-0.6, -0.3], [0.6, -0.3], [-0.6, 0.3], [0.6, 0.3]].map(([x, z], i) => html`<${Box} key=${i} args=${[0.06, 0.8, 0.06]} position=${[x, 0.4, z]} m=${M.steel} />`)}
+            <group position=${[0, 0.9, 0]}>
+              ${sparkSeeds.map((_, i) => html`
+                <mesh key=${i} ref=${(el) => (sparks.current[i] = el)}>
+                  <sphereGeometry args=${[0.035, 6, 6]} />
+                  <meshBasicMaterial color="#ffcf5a" />
+                </mesh>`)}
+            </group>
+          </group>
+        </group>`;
+    }
+
+    /* ---------- Stop 4: the shop ---------- */
+    function useSignTexture() {
+      const [tex, setTex] = useState(null);
+      useEffect(() => {
+        const draw = () => {
+          const c = document.createElement('canvas'); c.width = 1024; c.height = 180;
+          const g = c.getContext('2d');
+          g.fillStyle = '#0b2a4a'; g.fillRect(0, 0, c.width, c.height);
+          g.fillStyle = '#f5a623'; g.fillRect(0, c.height - 14, c.width, 14);
+          g.textAlign = 'center'; g.textBaseline = 'middle';
+          g.fillStyle = '#f5a623'; g.font = '800 80px Poppins, Arial, sans-serif'; g.fillText('D.VHARANDA', 512, 68);
+          g.fillStyle = '#ffffff'; g.font = '500 34px Poppins, Arial, sans-serif'; g.fillText('INVESTMENTS  ·  CHIVHU', 512, 132);
+          const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+          setTex(t);
+        };
+        (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(draw);
+      }, []);
+      return tex;
+    }
+    function Shop() {
+      const sign = useSignTexture();
+      const lights = useRef([]);
+      useFrame(() => {
+        const g = 0.2 + near(4) * 1.3;
+        lights.current.forEach((m) => m && (m.emissiveIntensity = g));
+      });
+      const bags = [];
+      for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) for (let z = 0; z < 2; z++) bags.push([x * 0.52, 0.1 + y * 0.2, z * 0.38]);
+      return html`
+        <group position=${[36, 0, 0]}>
+          <${Box} args=${[6.4, 3, 3.6]} position=${[0, 1.5, -0.2]} m=${{ color: '#f3efe6', roughness: 0.9 }} />
+          <${Box} args=${[6.8, 0.22, 4]} position=${[0, 3.1, -0.2]} m=${M.dark} />
+          <mesh key=${sign ? 'sign-tex' : 'sign-plain'} position=${[0, 2.55, 1.62]}>
+            <boxGeometry args=${[5.2, 0.9, 0.08]} />
+            <meshStandardMaterial color="#ffffff" map=${sign} roughness=${0.5} />
+          </mesh>
+          <mesh position=${[0, 1.95, 2.15]} rotation-x=${0.28} castShadow>
+            <boxGeometry args=${[6.4, 0.06, 1.1]} />
+            <meshStandardMaterial ...${M.amber} />
+          </mesh>
+          <${Box} args=${[1.2, 1.8, 0.04]} position=${[0, 0.9, 1.6]} m=${M.navy} />
+          ${[-2, 2].map((x, i) => html`
+            <mesh key=${x} position=${[x, 1.05, 1.61]}>
+              <boxGeometry args=${[1.6, 1.1, 0.02]} />
+              <meshStandardMaterial ref=${(m) => (lights.current[i] = m)} color="#ffe9c2" emissive="#ffbe5c" emissiveIntensity=${0.2} />
+            </mesh>`)}
+          <!-- cement bags -->
+          <group position=${[-3.1, 0, 2.3]}>
+            ${bags.map((p, i) => html`<${Box} key=${i} args=${[0.48, 0.18, 0.34]} position=${p} m=${{ color: '#d9cfb8', roughness: 1 }} />`)}
+          </group>
+          <!-- gas cylinders -->
+          <group position=${[2.4, 0, 2.4]}>
+            ${[0, 1, 2, 3, 4, 5].map((i) => html`
+              <group key=${i} position=${[(i % 3) * 0.38, 0, Math.floor(i / 3) * 0.38]}>
+                <${Cyl} args=${[0.15, 0.15, 0.5, 16]} position=${[0, 0.25, 0]} m=${{ color: '#1f5fbf', metalness: 0.4, roughness: 0.4 }} />
+                <${Cyl} args=${[0.05, 0.07, 0.1, 10]} position=${[0, 0.55, 0]} m=${M.steel} />
+              </group>`)}
+          </group>
+          <!-- buckets -->
+          ${['#e74c3c', '#2f80ed', '#27ae60', '#e74c3c'].map((c, i) => html`
+            <${Cyl} key=${i} args=${[0.2, 0.15, 0.32, 16, 1, true]} position=${[-1.2 + i * 0.45, 0.16, 2.5]} m=${{ color: c, roughness: 0.6, side: THREE.DoubleSide }} />`)}
+        </group>`;
+    }
+
+    /* ---------- Scene ---------- */
+    function World() {
+      const [visible, setVisible] = useState(true);
+      useEffect(() => {
+        const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { rootMargin: '100px' });
+        io.observe(section);
+        return () => io.disconnect();
+      }, []);
+      return html`
+        <${Canvas}
+          shadows
+          dpr=${[1, 1.5]}
+          frameloop=${visible ? 'always' : 'never'}
+          camera=${{ fov: 42, near: 0.1, far: 200, position: [-30, 14, 22] }}
+          gl=${{ antialias: true }}
+        >
+          <color attach="background" args=${['#d4e7f3']} />
+          <fog attach="fog" args=${['#d4e7f3', 32, 95]} />
+          <hemisphereLight args=${['#e3f1ff', '#c9a46a', 0.9]} />
+          <directionalLight
+            position=${[16, 26, 18]}
+            intensity=${2.3}
+            castShadow
+            shadow-mapSize=${[2048, 2048]}
+            shadow-camera-left=${-42}
+            shadow-camera-right=${42}
+            shadow-camera-top=${30}
+            shadow-camera-bottom=${-30}
+            shadow-camera-far=${90}
+            shadow-bias=${-0.0005}
+          />
+          <${CameraRig} />
+          <group position=${[-OFFSET, 0, 0]}>
+            <${Land} />
+            <${Borehole} />
+            <${Solar} />
+            <${Steel} />
+            <${Shop} />
+          </group>
+        <//>`;
+    }
+
+    function hasWebGL() {
+      try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); }
+      catch { return false; }
+    }
+    if (section && mountEl && hasWebGL()) {
+      createRoot(mountEl).render(html`<${World} />`);
+      section.classList.add('is-live');
+    }
+  </script>
+</head>
+<body>
+
+  <!-- ===== Top bar ===== -->
+  <div class="topbar">
+    <div class="container topbar-inner">
+      <span>Stand No. 10, Chambara Business Centre, Chivhu</span>
+      <span class="topbar-links">
+        <a href="tel:+263713234232">0713 234 232</a>
+        <a href="mailto:dvharanda@gmail.com">dvharanda@gmail.com</a>
+      </span>
+    </div>
+  </div>
+
+  <!-- ===== Header ===== -->
+  <header class="header">
+    <div class="container header-inner">
+      <a href="#home" class="logo" aria-label="D.V Investments (Pvt) Ltd – home">
+        <img src="images/logo.png" alt="D.V Investments (Pvt) Ltd" width="654" height="311">
+      </a>
+
+      <input type="checkbox" id="nav-toggle" class="nav-toggle">
+      <label for="nav-toggle" class="nav-toggle-label" aria-label="Open menu"><span></span></label>
+
+      <nav class="nav">
+        <a href="#services">Services</a>
+        <a href="#work">Our Work</a>
+        <a href="#world">3D Tour</a>
+        <a href="#process">How It Works</a>
+        <a href="#contact">Find Us</a>
+        <a href="#contact" class="btn btn-small">Get a Quote</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ===== Hero ===== -->
+  <section class="hero" id="home">
+    <div class="hero-slides" aria-hidden="true">
+      <img src="images/hero/hero-1.jpg" alt="">
+      <img src="images/hero/hero-2.jpg" alt="">
+      <img src="images/hero/hero-3.jpg" alt="">
+    </div>
+
+    <div class="container hero-content">
+      <p class="hero-kicker"><span></span>Chivhu · Boreholes · Solar · Supplies</p>
+      <h1>Water from the ground.<br><em>Power from the sun.</em></h1>
+      <p class="hero-lead">We drill and install boreholes, put up solar systems, fix fences and supply building materials across Chivhu and the surrounding farms. Call us and you speak to the team that does the job.</p>
+      <div class="hero-actions">
+        <a href="https://wa.me/263713234232?text=Hello%20D.Vharanda%2C%20I%27d%20like%20a%20quote" class="btn btn-wa" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2l-.5-.3Z"/></svg>
+          WhatsApp Us
+        </a>
+        <a href="tel:+263713234232" class="btn btn-line">Call 0713 234 232</a>
+      </div>
+      <p class="hero-note">All photos on this site are our own work, not stock images.</p>
+    </div>
+
+    <nav class="hero-strip" aria-label="Our services">
+      <div class="container hero-strip-inner">
+        <a href="#svc-water"><b>01</b><span>Boreholes</span><small>Drill · flush · install</small></a>
+        <a href="#svc-solar"><b>02</b><span>Solar</span><small>Panels · inverters · batteries</small></a>
+        <a href="#svc-steel"><b>03</b><span>Fencing &amp; Steel</span><small>Supply only or supply &amp; fix</small></a>
+        <a href="#svc-shop"><b>04</b><span>The Shop</span><small>Building · electrical · groceries</small></a>
+      </div>
+    </nav>
+  </section>
+
+  <!-- ===== Intro ===== -->
+  <section class="intro">
+    <div class="container intro-inner">
+      <p class="intro-statement">We drill the hole, mount the panels and weld the gate ourselves. <span>And we keep the materials in stock at our shop, so your job never waits on a supplier.</span></p>
+      <ul class="intro-facts">
+        <li><strong>AC &amp; DC</strong>Borehole pumps on the grid or on solar</li>
+        <li><strong>Supply &amp; fix</strong>Buy the materials, or have us install them</li>
+        <li><strong>Walk-in shop</strong>Stand No. 10, Chambara Business Centre</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Services ===== -->
+  <section class="services" id="services">
+    <div class="container">
+      <header class="section-title">
+        <p class="label">What we do</p>
+        <h2>Four trades, one phone number</h2>
+      </header>
+
+      <article class="svc" id="svc-water">
+        <div class="svc-media">
+          <img class="svc-main" src="images/full/tank-stand-install.jpg" alt="Our team installing a water tank stand" loading="lazy">
+          <img class="svc-small" src="images/thumbs/borehole-flushing.jpg" alt="Flushing a borehole on site" loading="lazy">
+        </div>
+        <div class="svc-body">
+          <span class="svc-num">01</span>
+          <h3>Borehole drilling, flushing &amp; installation</h3>
+          <p>New boreholes drilled, old ones flushed back to full flow. We then fit the pump, either AC on the grid or DC on solar, and put up the tank stand and piping.</p>
+          <ul class="svc-list">
+            <li>Borehole drilling</li>
+            <li>Borehole flushing</li>
+            <li>AC pump systems</li>
+            <li>DC / solar pump systems</li>
+            <li>Tank stands &amp; tanks</li>
+            <li>Piping &amp; fittings</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="svc svc-flip" id="svc-solar">
+        <div class="svc-media">
+          <img class="svc-main" src="images/full/rooftop-panels.jpg" alt="Solar panels we installed on a roof" loading="lazy">
+          <img class="svc-small" src="images/thumbs/inverter-install.jpg" alt="Inverter and battery installation" loading="lazy">
+        </div>
+        <div class="svc-body">
+          <span class="svc-num">02</span>
+          <h3>Household solar, supplied &amp; installed</h3>
+          <p>Complete home systems sized to what you actually run: lights, fridge, TV, freezer. We supply the equipment, mount the panels and wire the inverter and batteries.</p>
+          <ul class="svc-list">
+            <li>Solar panels</li>
+            <li>Inverters</li>
+            <li>Lithium batteries</li>
+            <li>Solar geysers</li>
+            <li>Roof &amp; ground mounting</li>
+            <li>Solar freezers</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="svc" id="svc-steel">
+        <div class="svc-media">
+          <img class="svc-main" src="images/full/security-fence-gate.jpg" alt="Security fence and gate we put up" loading="lazy">
+          <img class="svc-small" src="images/thumbs/barbed-wire.jpg" alt="Barbed wire rolls in stock" loading="lazy">
+        </div>
+        <div class="svc-body">
+          <span class="svc-num">03</span>
+          <h3>Fencing materials &amp; steelwork</h3>
+          <p>Buy fencing materials over the counter, or let our team put the whole fence up. Gates, doors, window frames and tank stands come out of our own workshop.</p>
+          <ul class="svc-list">
+            <li>Barbed &amp; razor wire</li>
+            <li>Diamond mesh</li>
+            <li>Poles &amp; droppers</li>
+            <li>Gates &amp; doors</li>
+            <li>Window frames</li>
+            <li>Supply only or supply &amp; fix</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="svc svc-flip" id="svc-shop">
+        <div class="svc-media">
+          <img class="svc-main" src="images/full/shop-interior.jpg" alt="Inside our shop at Chambara Business Centre" loading="lazy">
+          <img class="svc-small" src="images/thumbs/grocery-shelves.jpg" alt="Grocery shelves in our shop" loading="lazy">
+        </div>
+        <div class="svc-body">
+          <span class="svc-num">04</span>
+          <h3>The shop: building, electrical, plumbing &amp; groceries</h3>
+          <p>Our shop at Chambara Business Centre stocks what a building job needs, and what a household needs too.</p>
+          <ul class="svc-list">
+            <li>Cement &amp; building materials</li>
+            <li>Electrical supplies</li>
+            <li>Plumbing supplies</li>
+            <li>Groceries</li>
+            <li>Kitchenware</li>
+            <li>Gas cylinders</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </section>
+
+
+  <!-- ===== Our Work (gallery) ===== -->
+  <section class="section work" id="work">
+    <div class="container">
+      <div class="section-title">
+        <p class="label">Our work</p>
+        <h2>Real jobs, real stock</h2>
+        <p>Real photos from our installations, workshop and shop. Tap any photo to view it larger.</p>
+      </div>
+
+      <input type="radio" name="gf" id="gf-all" class="gf" checked>
+      <input type="radio" name="gf" id="gf-water" class="gf">
+      <input type="radio" name="gf" id="gf-solar" class="gf">
+      <input type="radio" name="gf" id="gf-fencing" class="gf">
+      <input type="radio" name="gf" id="gf-shop" class="gf">
+
+      <div class="filter-bar" role="group" aria-label="Filter photos">
+        <label for="gf-all">All</label>
+        <label for="gf-water">Boreholes &amp; Water</label>
+        <label for="gf-solar">Solar</label>
+        <label for="gf-fencing">Fencing &amp; Steel</label>
+        <label for="gf-shop">Our Shop</label>
+      </div>
+
+      <div class="gallery">
+        <a class="g-item cat-water" href="images/full/borehole-flushing.jpg">
+          <img src="images/thumbs/borehole-flushing.jpg" alt="Borehole flushing" loading="lazy">
+          <span class="g-cap"><small>Boreholes &amp; Water</small>Borehole flushing</span>
+        </a>
+        <a class="g-item cat-water" href="images/full/tank-stand-install.jpg">
+          <img src="images/thumbs/tank-stand-install.jpg" alt="Tank stand installation" loading="lazy">
+          <span class="g-cap"><small>Boreholes &amp; Water</small>Tank stand installation</span>
+        </a>
+        <a class="g-item cat-water" href="images/full/tank-stand-complete.jpg">
+          <img src="images/thumbs/tank-stand-complete.jpg" alt="Completed tank stand" loading="lazy">
+          <span class="g-cap"><small>Boreholes &amp; Water</small>Completed tank stand</span>
+        </a>
+        <a class="g-item cat-water" href="images/full/solar-borehole-pump.jpg">
+          <img src="images/thumbs/solar-borehole-pump.jpg" alt="Solar borehole pump" loading="lazy">
+          <span class="g-cap"><small>Boreholes &amp; Water</small>Solar borehole pump</span>
+        </a>
+        <a class="g-item cat-water" href="images/full/pump-house-tanks.jpg">
+          <img src="images/thumbs/pump-house-tanks.jpg" alt="Pump house &amp; twin tanks" loading="lazy">
+          <span class="g-cap"><small>Boreholes &amp; Water</small>Pump house &amp; twin tanks</span>
+        </a>
+        <a class="g-item cat-water" href="images/full/home-tank-stand.jpg">
+          <img src="images/thumbs/home-tank-stand.jpg" alt="Home water supply" loading="lazy">
+          <span class="g-cap"><small>Boreholes &amp; Water</small>Home water supply</span>
+        </a>
+        <a class="g-item cat-water" href="images/full/tank-stand-field.jpg">
+          <img src="images/thumbs/tank-stand-field.jpg" alt="Farm tank stand" loading="lazy">
+          <span class="g-cap"><small>Boreholes &amp; Water</small>Farm tank stand</span>
+        </a>
+        <a class="g-item cat-water" href="images/full/borehole-casing.jpg">
+          <img src="images/thumbs/borehole-casing.jpg" alt="Borehole casing" loading="lazy">
+          <span class="g-cap"><small>Boreholes &amp; Water</small>Borehole casing</span>
+        </a>
+        <a class="g-item cat-solar" href="images/full/inverter-battery.jpg">
+          <img src="images/thumbs/inverter-battery.jpg" alt="Inverter &amp; battery install" loading="lazy">
+          <span class="g-cap"><small>Solar</small>Inverter &amp; battery install</span>
+        </a>
+        <a class="g-item cat-solar" href="images/full/inverter-install.jpg">
+          <img src="images/thumbs/inverter-install.jpg" alt="Inverter installation" loading="lazy">
+          <span class="g-cap"><small>Solar</small>Inverter installation</span>
+        </a>
+        <a class="g-item cat-solar" href="images/full/rooftop-panels.jpg">
+          <img src="images/thumbs/rooftop-panels.jpg" alt="Rooftop solar array" loading="lazy">
+          <span class="g-cap"><small>Solar</small>Rooftop solar array</span>
+        </a>
+        <a class="g-item cat-solar" href="images/full/panel-mounting.jpg">
+          <img src="images/thumbs/panel-mounting.jpg" alt="Mounting solar panels" loading="lazy">
+          <span class="g-cap"><small>Solar</small>Mounting solar panels</span>
+        </a>
+        <a class="g-item cat-solar" href="images/full/solar-geyser.jpg">
+          <img src="images/thumbs/solar-geyser.jpg" alt="Solar geyser" loading="lazy">
+          <span class="g-cap"><small>Solar</small>Solar geyser</span>
+        </a>
+        <a class="g-item cat-solar" href="images/full/solar-pump-controller.jpg">
+          <img src="images/thumbs/solar-pump-controller.jpg" alt="Solar pump controller" loading="lazy">
+          <span class="g-cap"><small>Solar</small>Solar pump controller</span>
+        </a>
+        <a class="g-item cat-solar" href="images/full/solar-freezer.jpg">
+          <img src="images/thumbs/solar-freezer.jpg" alt="Solar-powered freezer" loading="lazy">
+          <span class="g-cap"><small>Solar</small>Solar-powered freezer</span>
+        </a>
+        <a class="g-item cat-solar" href="images/full/deye-inverter.jpg">
+          <img src="images/thumbs/deye-inverter.jpg" alt="Hybrid inverter system" loading="lazy">
+          <span class="g-cap"><small>Solar</small>Hybrid inverter system</span>
+        </a>
+        <a class="g-item cat-fencing" href="images/full/barbed-wire.jpg">
+          <img src="images/thumbs/barbed-wire.jpg" alt="Barbed wire stock" loading="lazy">
+          <span class="g-cap"><small>Fencing &amp; Steel</small>Barbed wire stock</span>
+        </a>
+        <a class="g-item cat-fencing" href="images/full/mesh-wire.jpg">
+          <img src="images/thumbs/mesh-wire.jpg" alt="Mesh wire rolls" loading="lazy">
+          <span class="g-cap"><small>Fencing &amp; Steel</small>Mesh wire rolls</span>
+        </a>
+        <a class="g-item cat-fencing" href="images/full/security-fence-gate.jpg">
+          <img src="images/thumbs/security-fence-gate.jpg" alt="Security fence &amp; gate" loading="lazy">
+          <span class="g-cap"><small>Fencing &amp; Steel</small>Security fence &amp; gate</span>
+        </a>
+        <a class="g-item cat-fencing" href="images/full/steel-door.jpg">
+          <img src="images/thumbs/steel-door.jpg" alt="Steel security door" loading="lazy">
+          <span class="g-cap"><small>Fencing &amp; Steel</small>Steel security door</span>
+        </a>
+        <a class="g-item cat-fencing" href="images/full/window-frames.jpg">
+          <img src="images/thumbs/window-frames.jpg" alt="Window frames &amp; burglar bars" loading="lazy">
+          <span class="g-cap"><small>Fencing &amp; Steel</small>Window frames &amp; burglar bars</span>
+        </a>
+        <a class="g-item cat-fencing" href="images/full/steel-frames.jpg">
+          <img src="images/thumbs/steel-frames.jpg" alt="Steel frame fabrication" loading="lazy">
+          <span class="g-cap"><small>Fencing &amp; Steel</small>Steel frame fabrication</span>
+        </a>
+        <a class="g-item cat-fencing" href="images/full/tank-stand-frame.jpg">
+          <img src="images/thumbs/tank-stand-frame.jpg" alt="Tank stand fabrication" loading="lazy">
+          <span class="g-cap"><small>Fencing &amp; Steel</small>Tank stand fabrication</span>
+        </a>
+        <a class="g-item cat-fencing" href="images/full/gate-fabrication.jpg">
+          <img src="images/thumbs/gate-fabrication.jpg" alt="Gate fabrication" loading="lazy">
+          <span class="g-cap"><small>Fencing &amp; Steel</small>Gate fabrication</span>
+        </a>
+        <div class="g-item g-video cat-fencing">
+          <video src="videos/workshop.mp4" poster="images/full/workshop-poster.jpg" controls muted playsinline preload="none"></video>
+          <span class="g-cap"><small>Video</small>Our steel workshop</span>
+        </div>
+        <a class="g-item cat-shop" href="images/full/shop-interior.jpg">
+          <img src="images/thumbs/shop-interior.jpg" alt="Our shop" loading="lazy">
+          <span class="g-cap"><small>Our Shop</small>Our shop</span>
+        </a>
+        <a class="g-item cat-shop" href="images/full/grocery-shelves.jpg">
+          <img src="images/thumbs/grocery-shelves.jpg" alt="Groceries" loading="lazy">
+          <span class="g-cap"><small>Our Shop</small>Groceries</span>
+        </a>
+        <a class="g-item cat-shop" href="images/full/hardware-shelves.jpg">
+          <img src="images/thumbs/hardware-shelves.jpg" alt="Hardware &amp; plumbing" loading="lazy">
+          <span class="g-cap"><small>Our Shop</small>Hardware &amp; plumbing</span>
+        </a>
+        <a class="g-item cat-shop" href="images/full/electrical-supplies.jpg">
+          <img src="images/thumbs/electrical-supplies.jpg" alt="Electrical supplies" loading="lazy">
+          <span class="g-cap"><small>Our Shop</small>Electrical supplies</span>
+        </a>
+        <a class="g-item cat-shop" href="images/full/gas-cylinders.jpg">
+          <img src="images/thumbs/gas-cylinders.jpg" alt="Gas cylinders" loading="lazy">
+          <span class="g-cap"><small>Our Shop</small>Gas cylinders</span>
+        </a>
+        <a class="g-item cat-shop" href="images/full/buckets.jpg">
+          <img src="images/thumbs/buckets.jpg" alt="Buckets &amp; containers" loading="lazy">
+          <span class="g-cap"><small>Our Shop</small>Buckets &amp; containers</span>
+        </a>
+        <a class="g-item cat-shop" href="images/full/kitchenware.jpg">
+          <img src="images/thumbs/kitchenware.jpg" alt="Kitchenware" loading="lazy">
+          <span class="g-cap"><small>Our Shop</small>Kitchenware</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Photo viewer -->
+  <dialog class="lightbox" id="lightbox">
+    <button class="lb-close" aria-label="Close">×</button>
+    <button class="lb-prev" aria-label="Previous photo">‹</button>
+    <figure>
+      <img src="" alt="">
+      <figcaption></figcaption>
+    </figure>
+    <button class="lb-next" aria-label="Next photo">›</button>
+  </dialog>
+
+  <!-- ===== Scroll-through 3D tour (inspired by scroll-world, built with react-three-fiber) ===== -->
+  <section class="world" id="world" aria-label="Scroll tour of our services">
+    <div class="world-sticky">
+      <div id="world-canvas" class="world-canvas" aria-hidden="true"></div>
+      <nav class="world-rail" aria-label="Tour stops">
+        <a href="#tour-intro" data-i="0"><span>Start</span></a>
+        <a href="#tour-water" data-i="1"><span>Boreholes</span></a>
+        <a href="#tour-solar" data-i="2"><span>Solar</span></a>
+        <a href="#tour-steel" data-i="3"><span>Steel &amp; Fencing</span></a>
+        <a href="#tour-shop" data-i="4"><span>Our Shop</span></a>
+        <a href="#tour-end" data-i="5"><span>Get a Quote</span></a>
+      </nav>
+      <div class="world-hint">Scroll to explore <span>↓</span></div>
+    </div>
+
+    <div class="world-steps">
+      <article class="world-step" id="tour-intro">
+        <div class="world-card">
+          <p class="eyebrow">Take the Tour</p>
+          <h2>Everything We Do, in One Place</h2>
+          <p>Scroll to fly through our world, from the borehole to the solar roof, the steel workshop and our shop in Chivhu.</p>
+        </div>
+      </article>
+
+      <article class="world-step" id="tour-water">
+        <div class="world-card">
+          <p class="eyebrow">01 · Water</p>
+          <h2>Borehole Drilling, Flushing &amp; Installation</h2>
+          <p>We drill new boreholes, flush old ones back to full flow, and install complete AC or DC (solar) pump systems with tanks and stands.</p>
+          <ul class="world-tags"><li>Drilling</li><li>Flushing</li><li>AC &amp; DC pumps</li><li>Tank stands</li></ul>
+        </div>
+      </article>
+
+      <article class="world-step" id="tour-solar">
+        <div class="world-card">
+          <p class="eyebrow">02 · Power</p>
+          <h2>Household Solar Systems</h2>
+          <p>Panels, inverters, batteries and solar geysers, supplied and installed so your home keeps running when the grid doesn't.</p>
+          <ul class="world-tags"><li>Panels</li><li>Inverters</li><li>Batteries</li><li>Solar geysers</li></ul>
+        </div>
+      </article>
+
+      <article class="world-step" id="tour-steel">
+        <div class="world-card">
+          <p class="eyebrow">03 · Security</p>
+          <h2>Fencing &amp; Steelwork</h2>
+          <p>Barbed wire, mesh, poles and gates, supplied only or fully fixed by our team, plus gates, doors and frames from our own workshop.</p>
+          <ul class="world-tags"><li>Barbed wire</li><li>Mesh</li><li>Gates</li><li>Supply &amp; fix</li></ul>
+        </div>
+      </article>
+
+      <article class="world-step" id="tour-shop">
+        <div class="world-card">
+          <p class="eyebrow">04 · Supplies</p>
+          <h2>Our Shop at Chambara Business Centre</h2>
+          <p>Building materials, electrical and plumbing supplies, groceries and kitchenware, all at Stand No. 10, Chivhu.</p>
+          <ul class="world-tags"><li>Building</li><li>Electrical</li><li>Plumbing</li><li>Groceries</li></ul>
+        </div>
+      </article>
+
+      <article class="world-step" id="tour-end">
+        <div class="world-card">
+          <p class="eyebrow">Let's Build</p>
+          <h2>Ready to Start Your Project?</h2>
+          <p>Call us or send a message for advice and a free quotation.</p>
+          <div class="hero-buttons">
+            <a href="#contact" class="btn">Get a Free Quote</a>
+            <a href="tel:+263713234232" class="btn btn-ghost">Call 0713 234 232</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===== How it works ===== -->
+  <section class="process" id="process">
+    <div class="container">
+      <header class="section-title section-title-light">
+        <p class="label">How it works</p>
+        <h2>From first call to finished job</h2>
+      </header>
+      <ol class="steps">
+        <li>
+          <h3>Call or WhatsApp</h3>
+          <p>Tell us what you need: a borehole, a solar system, a fence or materials from the shop.</p>
+        </li>
+        <li>
+          <h3>Site visit &amp; quote</h3>
+          <p>For installations we come out, look at the site and give you a written quotation.</p>
+        </li>
+        <li>
+          <h3>We do the job</h3>
+          <p>Our own team drills, installs or builds, using materials from our own stock.</p>
+        </li>
+        <li>
+          <h3>Handover</h3>
+          <p>We test everything with you on site and show you how it works before we leave.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ===== Contact / find us ===== -->
+  <section class="contact" id="contact">
+    <div class="container contact-inner">
+      <div class="contact-info">
+        <p class="label">Find us</p>
+        <h2>Come to the shop, or we'll come to you</h2>
+
+        <ul class="contact-list">
+          <li>
+            <span class="c-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.2 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .6 3.6 1 1 0 0 1-.3 1Z"/></svg></span>
+            <div><strong>Phone &amp; WhatsApp</strong><a href="tel:+263713234232">0713 234 232</a></div>
+          </li>
+          <li>
+            <span class="c-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5-8-5V6l8 5 8-5Z"/></svg></span>
+            <div><strong>Email</strong><a href="mailto:dvharanda@gmail.com">dvharanda@gmail.com</a></div>
+          </li>
+          <li>
+            <span class="c-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.3 7 13 7 13s7-7.7 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg></span>
+            <div><strong>Shop address</strong>Stand No. 10, Chambara Business Centre, Chivhu</div>
+          </li>
+        </ul>
+
+        <div class="map">
+          <iframe title="Map: Chambara Business Centre, Chivhu" src="https://maps.google.com/maps?q=Chambara%20Business%20Centre%2C%20Chivhu%2C%20Zimbabwe&amp;z=14&amp;output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+      </div>
+
+      <form class="contact-form" action="mailto:dvharanda@gmail.com" method="post" enctype="text/plain">
+        <h3>Ask for a quote</h3>
+        <label>Your name
+          <input type="text" name="name" required>
+        </label>
+        <label>Phone number
+          <input type="tel" name="phone" placeholder="07xx xxx xxx">
+        </label>
+        <label>What do you need?
+          <select name="service">
+            <option>Borehole drilling / flushing</option>
+            <option>Borehole pump installation (AC / DC)</option>
+            <option>Household solar</option>
+            <option>Fencing (supply or supply &amp; fix)</option>
+            <option>Gates, doors or steelwork</option>
+            <option>Building / electrical / plumbing materials</option>
+            <option>Groceries &amp; kitchenware</option>
+            <option>Something else</option>
+          </select>
+        </label>
+        <label>Where is the job, and any details?
+          <textarea name="message" rows="4"></textarea>
+        </label>
+        <button type="submit" class="btn btn-block">Send request</button>
+        <p class="form-note">Faster: <a href="https://wa.me/263713234232" target="_blank" rel="noopener">message us on WhatsApp</a>.</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>
+        <a href="#home" class="logo logo-footer" aria-label="D.V Investments (Pvt) Ltd – back to top">
+          <img src="images/logo.png" alt="D.V Investments (Pvt) Ltd" width="654" height="311" loading="lazy">
+        </a>
+        <p>Boreholes · Solar · Fencing &amp; steelwork · Building supplies · Groceries</p>
+      </div>
+      <div class="footer-links">
+        <a href="#services">Services</a>
+        <a href="#work">Our Work</a>
+        <a href="#world">3D Tour</a>
+        <a href="#process">How It Works</a>
+        <a href="#contact">Find Us</a>
+      </div>
+    </div>
+    <p class="copyright">© 2026 D.Vharanda Investments (Pvt) Ltd · Stand No. 10, Chambara Business Centre, Chivhu · 0713 234 232</p>
+  </footer>
+
+  <!-- Floating WhatsApp button -->
+  <a class="wa-float" href="https://wa.me/263713234232" target="_blank" rel="noopener" aria-label="Chat with us on WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2l-.5-.3Z"/></svg>
+  </a>
+
+  <!-- Photo viewer: opens gallery photos full-size (without JS the links simply open the image) -->
+  <script>
+    (function () {
+      var box = document.getElementById('lightbox');
+      if (!box || typeof box.showModal !== 'function') return;
+      var img = box.querySelector('img'), cap = box.querySelector('figcaption'), list = [], cur = 0;
+
+      function visibleItems() {
+        return Array.prototype.filter.call(document.querySelectorAll('.gallery a.g-item'), function (a) {
+          return a.offsetParent !== null;
+        });
+      }
+      function show(i) {
+        cur = (i + list.length) % list.length;
+        var a = list[cur], thumb = a.querySelector('img');
+        img.src = a.getAttribute('href');
+        img.alt = thumb.alt;
+        cap.textContent = thumb.alt + '  (' + (cur + 1) + ' / ' + list.length + ')';
+      }
+      document.querySelector('.gallery').addEventListener('click', function (e) {
+        var a = e.target.closest('a.g-item');
+        if (!a) return;
+        e.preventDefault();
+        list = visibleItems();
+        show(list.indexOf(a));
+        box.showModal();
+      });
+      box.querySelector('.lb-close').onclick = function () { box.close(); };
+      box.querySelector('.lb-prev').onclick = function () { show(cur - 1); };
+      box.querySelector('.lb-next').onclick = function () { show(cur + 1); };
+      box.addEventListener('click', function (e) { if (e.target === box) box.close(); });
+      document.addEventListener('keydown', function (e) {
+        if (!box.open) return;
+        if (e.key === 'ArrowLeft') show(cur - 1);
+        if (e.key === 'ArrowRight') show(cur + 1);
+      });
+    })();
+  </script>
+</body>
+</html>
